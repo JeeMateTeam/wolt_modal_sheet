@@ -67,11 +67,11 @@ class _WoltModalSheetAnimatedSwitcherState
   AnimationController? _animationController;
 
   /// List of [ScrollController] objects, one for each [WoltModalSheetPage] main content.
-  List<ScrollController> _scrollControllers = [];
+  List<({ScrollController c, bool autoDispose})> _scrollControllers = [];
 
   /// The [ScrollController] of the current [WoltModalSheetPage] main content.
   ScrollController get _currentPageScrollController =>
-      _scrollControllers[_pageIndex];
+      _scrollControllers[_pageIndex].c;
 
   /// List of [ValueNotifier] objects, each one for the listening of the scroll position updates
   /// in each [WoltModalSheetPage] main content.
@@ -116,19 +116,21 @@ class _WoltModalSheetAnimatedSwitcherState
     _scrollControllers.clear();
     _scrollControllers = [
       for (int i = 0; i < _pagesCount; i++)
-        (_page.scrollController ??
+        (c: (_page.scrollController ??
             ScrollController(initialScrollOffset: _scrollPositions[i].value)),
+        autoDispose: _page.scrollController == null),
     ];
   }
 
   void _subscribeToCurrentPageScrollPositionChanges() {
     for (final scrollController in _scrollControllers) {
-      scrollController.addListener(() {
-        if (_currentPageScrollController.hasClients) {
-          _currentPageScrollPosition.value =
-              _currentPageScrollController.position.pixels;
-        }
-      });
+      scrollController.c.addListener(_currentPageScrollPositionChanges);
+    }
+  }
+  void _currentPageScrollPositionChanges() {
+    if (_currentPageScrollController.hasClients) {
+      _currentPageScrollPosition.value =
+          _currentPageScrollController.position.pixels;
     }
   }
 
@@ -214,7 +216,12 @@ class _WoltModalSheetAnimatedSwitcherState
   void dispose() {
     _animationController?.dispose();
     for (final element in _scrollControllers) {
-      element.dispose();
+      if (element.autoDispose) {
+        element.c.dispose();
+      } //
+      else {
+        element.c.removeListener(_currentPageScrollPositionChanges);
+      }
     }
     for (final element in _scrollPositions) {
       element.dispose();
